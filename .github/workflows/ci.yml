@@ -18,17 +18,12 @@ jobs:
           - "3.4.2"
           - "3.3.7"
           - "3.2.7"
+        rabbitmq-image-tag:
+          - "rabbitmq:4-management"
 
     env:
       CI: true
       RUNS: 5
-
-    services:
-      rabbitmq:
-        image: rabbitmq:4-management
-        ports:
-          - 15672:15672
-          - 5672:5672
 
     steps:
       - uses: actions/checkout@v4
@@ -36,11 +31,17 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby-version }}
+
+      - name: Start RabbitMQ and ToxiProxy with Docker Compose
+        run: export RABBITMQ_IMAGE=${{ matrix.rabbitmq-image-tag }} && docker compose up -d --wait
+
       - name: Install dependencies
         run: bundle install
 
-      - name: Configure RabbitMQ
-        run: BUNNY_RABBITMQCTL=DOCKER:${{job.services.rabbitmq.id}} BUNNY_RABBITMQ_PLUGINS=DOCKER:${{job.services.rabbitmq.id}} bin/ci/before_build.sh
-
       - name: Run tests
         run: bundle exec rspec -c -fd spec/higher_level_api spec/lower_level_api spec/issues
+
+      - name: Stop and cleanup services
+        if: always()
+        run: docker compose down
+
